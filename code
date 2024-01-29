@@ -1,0 +1,1 @@
+points_on_rivers <- points_on_rivers[!is.na(points_on_rivers$<some_river_column>), ]
