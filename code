@@ -1,3 +1,118 @@
 for(i in 1:nrow(df)){
     df1 <- df[i, ]
 }
+
+###########
+setwd("C:/Users/User/OneDrive - Queen's University Belfast/PhD - the general idea of the impacts of instream barriers in NI/AMBER Data/ROI")
+atlas=read.csv("atlas.csv")
+head(df)
+install.packages("maps")
+install.packages("rworldmap")
+install.packages("rworldxtra")
+library(maps)
+library(rworldmap)
+library(rworldxtra)
+
+newmap <- getMap(resolution="high")
+par(mar=c(0.5,0.5,0.5,0.5))
+plot(newmap, col="tan1", border="black",bg="lightblue", 
+     xlim=c(0, 40), ylim=c(30,72))
+
+setwd("C:/Users/isma-/OneDrive/Escritorio/Crustaceans0/crustaceans/qgis")
+riversData <- st_read("Europe_Hydrography.shp")
+plot(riversData, col= "steelblue2", add=T)
+
+unique(df$type)
+df1 = df%>% filter(type=="dam") %>% filter(Country=="UNITED KINGDOM")
+unique(df$Country)
+names(df)
+points(atlas1$Longitude_WGS84 , atlas1$Latitude_WGS84, 
+       col="black", pch=23, cex=0.8, bg="red2")
+
+library(remotes)
+install.packages("sf")
+library(sf)
+df1 = df%>% filter(!country == "spain")
+df1 = df1%>% filter(!country == "norway")
+
+df2 <- st_as_sf(df1,coords = c("Longitude_X", "Latitude_Y"), crs = 4326)
+CRS(df2)
+
+df2 <- st_transform(df2, st_crs(riversData))
+df3 <- st_join(df2, riversData, join = st_intersects)
+
+atlas2 <- st_as_sf(atlas1,coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+atlas2 <- st_transform(atlas2, st_crs(riversData))
+atlas3 <- st_join(atlas2, riversData, join = st_intersects)
+
+rivers=unique(df3$geometry)
+atlas3 = atlas3%>% filter(geometry %in% rivers)
+
+
+######
+dfgermany <- df%>% filter(country == "germany")
+atlasgermany <- atlas%>% filter(Country =="germany")
+
+dfgermany <- st_as_sf(dfgermany,coords = c("Longitude_X", "Latitude_Y"), crs = 4326)
+
+dfgermany <- st_transform(dfgermany, st_crs(riversData))
+dfgermany2 <- st_join(dfgermany, riversData, join = st_intersects)
+
+dfgermany2 <- dfgermany2[!is.na(dfgermany2$geometry), ]
+
+atlasgermany <- st_as_sf(atlasgermany,coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+
+atlasgermany <- st_transform(atlasgermany, st_crs(riversData))
+atlasgermany2 <- st_join(atlasgermany, riversData, join = st_intersects)
+
+atlasgermany2 <- atlasgermany2[!is.na(atlasgermany2$geometry), ]
+
+
+
+names(atlasgermany2)
+names(dfgermany2)
+
+dfgermany3 = dfgermany2[, 10] 
+dfgermany3$ID = "TimeSeries"
+
+atlasgermany3 = atlasgermany2[, 13]
+atlasgermany3$ID = "Atlas"
+
+Data = rbind(atlasgermany3, dfgermany3)
+
+
+
+for(e in nrow(dfgermany2)) { 
+dfgermany3 = dfgermany2[dfgermany2$geometry == e,]  
+  }
+
+for(i in 1:nrow(dfgermany2)){
+  dfgermany4 <- dfgermany2[i, ]
+  dfgermany4_sf <- st_as_sf(dfgermany4, coords = c("geometry"))
+  riversData_sf <- st_as_sf(riversData, coords = c("geometry"))
+  buffered_points <- st_buffer(dfgermany4_sf, dist = 1000000) 
+  intersection_result <- st_intersection(buffered_points, riversData_sf)
+}
+
+
+str(dfgermany4)
+str(riversData)
+
+
+#######
+df=read_excel("Global_dataset.xlsx", sheet = "Sheet1")
+install.packages("readxl")
+library("readxl")
+head(df)
+setdiff(df$country, atlas$Country)
+unique(df$country)
+unique(atlas$Country)
+atlas$Country=tolower(atlas$Country)
+df$country=tolower(df$country)
+
+df$country[df$country=="uk"]="united kingdom"
+df$country[df$country=="czechrep"]="czech republic"
+
+atlas1 = atlas%>%filter(Country %in% unique(df$country))
+
+
