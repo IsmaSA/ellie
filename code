@@ -117,6 +117,7 @@ atlas1 = atlas%>%filter(Country %in% unique(df$country))
 
 
 ##### Ismael: 
+  
 df <- read_xlsx("Global_dataset.xlsx", sheet = "Sheet1")
 head(df)
 df <- df[,c(1,8,9)]
@@ -135,21 +136,48 @@ crs(riversData)
   
 ## Now combine df with riverData:
 coordinates(df) <- ~Longitude_X+Latitude_Y
+df_sf <- st_as_sf(df, coords = c("Longitude_X", "Latitude_Y"), crs = st_crs(riversData))
 df_sf <- st_set_crs(df_sf, 4326) 
 
 df_sf_projected <- st_transform(df_sf, crs = 4326)
 
 # Apply a buffer in meters
-#df_sf_buffered <- st_buffer(df_sf_projected, dist = 150000)
+df_sf_buffered <- st_buffer(df_sf_projected, dist = 1000)
 riversData_projected <- st_transform(riversData, crs = st_crs(df_sf_projected))
 
 # Now perform the spatial join with the buffered points
-intersections <- st_join(df_sf_projected, riversData_projected, join = st_intersects)
-intersections <- st_join(df_sf_projected, riversData_projected)
+#intersections <- st_join(df_sf_projected, riversData_projected, join = st_intersects)
+#intersections <- st_join(df_sf_projected, riversData_projected)
+
+nearest_river_indices <- st_nearest_feature(df_sf_buffered, riversData_projected)
+nearest_rivers <- riversData_projected[nearest_river_indices, ]
+df_sf$ID_name <- nearest_rivers$HYRIV_ID
+df_sf$geometry_river <- nearest_rivers$geometry
+
+# River from where we have data:
+river2<- riversData %>% filter(HYRIV_ID %in% unique(df_sf$ID_name))
+
+
+################  Now the same but for atlas
+coordinates(atlas) <- ~Longitude_WGS84 + Latitude_WGS84
+atlas_sf <- st_as_sf(atlas, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = st_crs(river2))
+atlas_sf <- st_set_crs(atlas_sf, 4326) 
+
+# Apply a buffer in meters
+atlas_sf_buffered <- st_buffer(atlas_sf, dist = 1000)
+atlas_sf_buffered <- st_transform(atlas_sf_buffered, st_crs(river2))
 
 
 
+# Visualization to see if works (or not)
+df_sf$ID_name <- as.numeric(df_sf$ID_name)
+riversData$HYRIV_ID <- as.character(riversData$HYRIV_ID)
+
+
+
+  
 ggplot() +
-  geom_sf(data = riversData, color = 'blue') +
-  geom_sf(data = df_sf_buffered[1,], color = 'red', size = 2) +
-  theme_minimal()
+  geom_sf(data = river2, color = 'blue', size = 1) + 
+  geom_sf(data = df_sf, color = 'red', size = 0.2) + theme_bw()
+  
+  
