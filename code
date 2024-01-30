@@ -151,6 +151,6 @@ intersections <- st_join(df_sf_buffered, riversData_projected, join = st_interse
 
 ggplot() +
   geom_sf(data = riversData, color = 'blue') +
-  geom_sf(data = df_sf_buffered[1,], color = 'red', size = 2) +
+  geom_sf(data = df_sf_buffered, color = 'red', size = 2) +
   theme_minimal()
   
