@@ -180,4 +180,40 @@ ggplot() +
   geom_sf(data = river2, color = 'blue', size = 1) + 
   geom_sf(data = df_sf, color = 'red', size = 0.2) + theme_bw()
   
-  
+
+################## I want to try another approach...    ##########
+   
+str(df)
+str(atlas)
+
+df_sf <- st_as_sf(df, coords = c("Longitude_X", "Latitude_Y"), crs = 4326)
+df_sf_buffered <- st_buffer(df_sf, dist = 50000) #50km
+
+plot(df_sf_buffered)  # see the buffers 
+
+atlas <- st_transform(atlas, st_crs(df_sf_buffered))
+
+joined <- st_join(df_sf_buffered, atlas, join = st_intersects)
+
+dam_counts <- joined %>%
+  group_by(site_id) %>%
+  summarise(dam_count = sum(!is.na(GRAND_ID)), .groups = 'drop')
+
+
+## try witht he other damns layer
+
+str(df)
+atlas = read.csv("atlas.csv")
+str(atlas)
+
+atlas_sf <- st_as_sf(atlas, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+df_sf_buffered 
+
+joined <- st_join(df_sf_buffered, atlas_sf, join = st_intersects)
+
+# Count the number of dams 
+library(dplyr)
+dam_counts <- joined %>%
+  group_by(site_id, type) %>%
+  summarise(dam_count = n_distinct(GUID), .groups = 'drop')  
+
