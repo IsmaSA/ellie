@@ -239,10 +239,10 @@ Simpson1$year <- df1$year
 
 #evenness
 library("SciViews")
-Evenness <- Shannon1$Shannon/log(dfRichness$richness)
-Evenness1 <- as.data.frame(Evenness)
-Evenness1$site_id <- df1$site_id
-Evenness1$year <- df1$year
+dfEvenness <- Shannon1$Shannon/log(dfRichness$richness)
+dfEvenness <- as.data.frame(Evenness)
+dfEvenness$site_id <- df1$site_id
+dfEvenness$year <- df1$year
 
 #Number of native and non-natives
 NoNN <- df %>% group_by(site_id, year, Alien)%>% summarise(richness = n_distinct(taxon))
@@ -262,10 +262,6 @@ dfJoined$proportion <- dfJoined$abundance/dfJoined$Totalabundance*100
 #I used cbind() for the abundance, evenness and diversity indices because they all have the same number of rows
 
 library(tidyverse)
-dfCombine <- dfAbundance %>%
-  cbind(Evenness1, Shannon1, Simpson1) %>%
-  left_join(dfRichness, by = c("site_id", "year"))
-
-dfCombine1 <- df %>%
-  semi_join(dfJoined, by = c("site_id", "year"))%>% 
-  left_join(dfCombine, by = c("site_id", "year"))
+dfCombine <- df %>%
+  semi_join(dfJoined, by = c("site_id", "year")) %>%
+  left_join(dfAbundance %>% cbind(dfEvenness, Shannon1, Simpson1) %>% left_join(dfRichness, by = c("site_id", "year")), by = c("site_id", "year"))
