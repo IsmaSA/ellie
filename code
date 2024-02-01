@@ -217,3 +217,55 @@ dam_counts <- joined %>%
   group_by(site_id, type) %>%
   summarise(dam_count = n_distinct(GUID), .groups = 'drop')  
 
+##########community dynamics of time series#####
+dfAbundance <- df %>% group_by(site_id, year)%>% summarise(Totalabundance = sum(abundance))
+dfRichness <- df %>% group_by(site_id, year)%>% summarise(richness = n())
+#dfRichness <- df %>% group_by(site_id, year)%>% summarise(richness = n_distinct(taxon))
+df1 <- df %>% group_by(site_id, year, taxon)%>% summarise(abundance = sum(abundance)) %>% pivot_wider(names_from = taxon, values_from = abundance, values_fill = 0)
+
+#Shannon diversity 
+library(vegan)
+library(tidyr)
+Shannon <- diversity(df1, index = "shannon")
+Shannon1 <- as.data.frame(Shannon)
+Shannon1$site_id <- df1$site_id
+Shannon1$year <- df1$year
+
+#Simpson diversity
+Simpson <- diversity(df1, index = "simpson")
+Simpson1 <- as.data.frame(Simpson)
+Simpson1$site_id <- df1$site_id
+Simpson1$year <- df1$year
+
+#evenness
+library("SciViews")
+Evenness <- Shannon1$Shannon/log(dfRichness$richness)
+Evenness1 <- as.data.frame(Evenness)
+Evenness1$site_id <- df1$site_id
+Evenness1$year <- df1$year
+
+#Number of native and non-natives
+NoNN <- df %>% group_by(site_id, year, Alien)%>% summarise(richness = n_distinct(taxon))
+
+#Abundance of native and non-native
+AlienAbundance <- df %>% group_by(site_id, year, Alien) %>% summarise(abundance = sum(abundance))
+
+#Proportional abundances
+#join df to abundance 
+dfJoined <- left_join(dfAbundance, AlienAbundance, by = c("site_id", "year"))
+
+dfJoined$proportion <- dfJoined$abundance/dfJoined$Totalabundance*100
+
+
+###Combine predictors into one dataframe
+#I'm not sure of any of this but it does work. I am still working on line 270 because when I use semi_join it looses proportion from dfJoined but with left_join it has duplicated columns
+#I used cbind() for the abundance, evenness and diversity indices because they all have the same number of rows
+
+library(tidyverse)
+dfCombine <- dfAbundance %>%
+  cbind(Evenness1, Shannon1, Simpson1) %>%
+  left_join(dfRichness, by = c("site_id", "year"))
+
+dfCombine1 <- df %>%
+  semi_join(dfJoined, by = c("site_id", "year"))%>% 
+  left_join(dfCombine, by = c("site_id", "year"))
