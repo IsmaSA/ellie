@@ -262,6 +262,63 @@ dfJoined$proportion <- dfJoined$abundance/dfJoined$Totalabundance*100
 #I used cbind() for the abundance, evenness and diversity indices because they all have the same number of rows
 
 library(tidyverse)
-dfCombine <- df %>%
-  semi_join(dfJoined, by = c("site_id", "year")) %>%
-  left_join(dfAbundance %>% cbind(dfEvenness, Shannon1, Simpson1) %>% left_join(dfRichness, by = c("site_id", "year")), by = c("site_id", "year"))
+dfCombine1 <- dfAbundance %>%
+  cbind(Evenness1, Shannon1, Simpson1) 
+
+names(dfCombine1)
+dfCombine1 <- dfCombine1[,-c(5, 6, 8, 9, 11, 12)]
+colnames(dfCombine1)[1]<- "site_id"
+colnames(dfCombine1)[2]<- "year"
+
+dfCombine1 <- dfCombine1 %>%
+  left_join(dfRichness, by = c("site_id", "year"))
+
+dfCombine1 <- dfCombine1 %>% 
+  left_join(dfJoined, by = c("site_id", "year"))
+
+names(dfCombine1)
+dfCombine1 <- dfCombine1[,-c(3)]
+names(dfCombine1)
+colnames(dfCombine1)[7]<- "Totalabundance"
+
+
+
+
+
+###############################################################################
+##### GLM #############################
+continuous <- select_if(df, is.numeric)
+summary(continuous)
+#plot the distribution
+
+hist(dfCombine1$richness)
+sd(dfCombine1$richness)
+mean(dfCombine1$richness)
+
+str(dfCombine1)
+
+
+library(MASS)
+dfCombine2$country <- as.factor(dfCombine2$country)
+GLM1 <- glmer.nb(richness ~ year + (1|country), data = dfCombine2)
+summary(GLM1)
+
+dfCombine2 <- dfCombine2 %>% drop_na()
+
+options(scipen = 999)
+
+barrier <- read_xlsx("Copy of dam.xlsx")
+dfCombine2 <- dfCombine1 %>%
+  left_join(barrier, by = "site_id")
+dfCombine2 <- dfCombine2 %>% distinct(site_id, year, Evenness, Shannon, Simpson, richness, Totalabundance, Alien, abundance, proportion, type, dam_count, country)
+
+names(dfCombine2)
+
+
+dfCombine2 <- dfCombine2 %>%
+  left_join(df[, c(1, 5)], by = "site_id")
+
+
+
+
+
