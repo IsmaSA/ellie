@@ -320,5 +320,30 @@ dfCombine2 <- dfCombine2 %>%
 
 
 
+#############################################  Note: Upload also the data :s in the "data" folder:  ############################################################
+# Try making a gamms (i.e., not linear model)
+
+library(mgcv)
+# Note: type must be a factor (it is a categorical variable)
+# Note "s()" is the smoother and "re" to select the random effect.
+# Country must be a factor
+
+gamm_isma <- gam(richness ~ type + s(dam_counts) + s(year) + s(country, bs="re"),
+            data = dfCombine2, select =T,
+            family = nb())
+
+op <- par(mfrow=c(2,2), mar=c(4,4,1,1))
+gam.check(gamm_isma)
+par(op)
+summary.gam(gamm_isma)
+op <- par(mfrow=c(3,3), mar=c(4,4,1,1))
+plot(gamm_isma, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seWithMean = TRUE, residuals=TRUE)
+
+
+
+
+
+
+
 
 
