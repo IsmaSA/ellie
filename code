@@ -328,6 +328,7 @@ library(mgcv)
 # Note "s()" is the smoother and "re" to select the random effect.
 # Country must be a factor
 
+
 gamm_isma <- gam(richness ~ type + s(dam_counts) + s(year) + s(country, bs="re"),
             data = dfCombine2, select =T,
             family = nb())
@@ -338,6 +339,58 @@ par(op)
 summary.gam(gamm_isma)
 op <- par(mfrow=c(3,3), mar=c(4,4,1,1))
 plot(gamm_isma, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seWithMean = TRUE, residuals=TRUE)
+
+
+
+#####################Ellie gamms#####
+#remove NA from time series with NA dam count & type 
+dfCombine2 <- dfCombine2 %>% filter(!site_id %in% c("103000515", "111000058", "111000062", "119000001", "119000003", "119000004", "119000007", "119000009"))
+str(dfCombine2)
+
+dfCombine2$site_id <- as.character(dfCombine2$site_id)
+anyNA(dfCombine2)
+
+dfCombine2$richness <- as.numeric(dfCombine2$richness)
+dfCombine2$type <- as.factor(dfCombine2$type)
+dfCombine2$country <-as.factor(dfCombine2$country)
+
+
+gamm_isma <- gam(richness ~ type + s(dam_count) + s(year) + s(country, bs="re"),
+                 data = dfCombine2, select =T,
+                 family = nb())
+
+op <- par(mfrow=c(2,2), mar=c(4,4,1,1))
+gam.check(gamm_isma)
+par(op)
+summary.gam(gamm_isma)
+op <- par(mfrow=c(3,3), mar=c(4,4,1,1))
+plot(gamm_isma, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seWithMean = TRUE, residuals=TRUE)
+
+dfCombine2 <- dfCombine2[dfCombine2$year > 1999, ]
+
+###########Combining dfCombine with full data (i.e., temp, strahler etc.) and changing dam count from 50 to km data
+barrier <- read_xlsx("dam_counts_10km.xlsx")
+barrier$site_id <- as.character(barrier$site_id)
+dfCombine2 <- dfCombine2 %>%
+  left_join(barrier, by = "site_id")
+
+names(dfCombine2)
+dfCombine2 <- dfCombine2[,-c(11, 12, 16)]
+names(dfCombine2)
+colnames(dfCombine2)[12]<- "type"
+colnames(dfCombine2)[13]<- "dam_count"
+
+fulldata <- read_xlsx("Full_data.xlsx")
+
+fulldata$site_id <- as.character(fulldata$site_id)
+
+dfCombine2 <- dfCombine2 %>%
+  left_join(fulldata[, c(1, 22, 23, 24, 26, 29, 30, 31, 32)], by = "site_id")
+
+names(dfCombine2)
+names(fulldata)
+str(fulldata)
+str(dfCombine2)
 
 
 
