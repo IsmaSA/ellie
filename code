@@ -397,6 +397,338 @@ str(dfCombine2)
 
 
 
+##########################################################################################################################################
+#####Tidied R code###############
+
+setwd("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/ROI")
+
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(sf)
+
+df <- read_xlsx("Global_dataset.xlsx", sheet = "Sheet1")
+
+##Community metrics
+dfAbundance <- df %>% group_by(site_id, year)%>% summarise(Totalabundance = sum(abundance))
+dfRichness <- df %>% group_by(site_id, year)%>% summarise(richness = n())
+#dfRichness <- df %>% group_by(site_id, year)%>% summarise(richness = n_distinct(taxon))
+df1 <- df %>% group_by(site_id, year, taxon)%>% summarise(abundance = sum(abundance)) %>% pivot_wider(names_from = taxon, values_from = abundance, values_fill = 0)
+
+##Shannon diversity 
+library(vegan)
+library(tidyr)
+
+Shannon <- diversity(df1, index = "shannon")
+Shannon1 <- as.data.frame(Shannon)
+Shannon1$site_id <- df1$site_id
+Shannon1$year <- df1$year
+
+##Simpson diversity
+Simpson <- diversity(df1, index = "simpson")
+Simpson1 <- as.data.frame(Simpson)
+Simpson1$site_id <- df1$site_id
+Simpson1$year <- df1$year
+
+#evenness
+library("SciViews")
+Evenness <- Shannon1$Shannon/log(dfRichness$richness)
+Evenness1 <- as.data.frame(Evenness)
+Evenness1$site_id <- df1$site_id
+Evenness1$year <- df1$year
+
+#Number of native and non-natives
+NoNN <- df %>% group_by(site_id, year, Alien)%>% summarise(richness = n_distinct(taxon))
+
+#Abundance of native and non-native
+AlienAbundance <- df %>% group_by(site_id, year, Alien) %>% summarise(abundance = sum(abundance))
+
+#Proportional abundances
+#join df to abundance 
+dfJoined <- left_join(dfAbundance, AlienAbundance, by = c("site_id", "year"))
+
+dfJoined$proportion <- dfJoined$abundance/dfJoined$Totalabundance*100
+
+
+
+
+##Turnover#########################
+tover <- df %>% group_by(site_id, year, taxon) %>% summarise(abundance = sum(abundance, na.rm = T))
+
+
+library(codyn)
+turnover(
+  tover,
+  time.var = "year",
+  species.var = "taxon",
+  abundance.var = "abundance",
+  replicate.var = NA,
+  metric = "total"
+)
+
+
+###
+turnover_df <- data.frame(Site = character(),
+                          Year = numeric(),
+                          Turnover = numeric())
+
+# Iterate over the two sites
+for (site in unique(df$site_id)) {
+  # Filter the data for the current site
+  site_data <- tover %>% filter(site_id == site)
+  
+  # Group by year and calculate turnover
+  site_turnover <- turnover(
+    site_data,
+    time.var = "year",
+    species.var = "taxon",
+    abundance.var = "abundance",
+    metric="total"
+  )
+  
+  # Combine the results into a data frame
+  site_turnover_df <- data.frame(Site = site,
+                                 Year = site_turnover$year,
+                                 Turnover = site_turnover$total)
+  
+  # Add the results to the main data frame
+  turnover_df <- rbind(turnover_df, site_turnover_df) 
+  cat("done:", site)
+}
+
+
+
+####Combine coomunity dynamics into one df
+dfCombine <- dfAbundance %>%
+  cbind(Evenness1, Shannon1, Simpson1) 
+
+names(dfCombine)
+dfCombine <- dfCombine[,-c(5, 6, 8, 9, 11, 12)]
+colnames(dfCombine)[1]<- "site_id"
+colnames(dfCombine)[2]<- "year"
+
+dfCombine <- dfCombine %>%
+  left_join(dfRichness, by = c("site_id", "year"))
+
+dfCombine <- dfCombine %>% 
+  left_join(dfJoined, by = c("site_id", "year"))
+
+names(dfCombine)
+dfCombine <- dfCombine[,-c(3)]
+names(dfCombine)
+colnames(dfCombine)[7]<- "Totalabundance"
+
+
+#add country, longitude and latitude to dfCombine
+dfCombine <- dfCombine %>%
+  left_join(df[, c(1, 2, 3, 5, 8, 9)], by = "site_id")
+
+names(dfCombine)
+
+dfCombine <- dfCombine[,-c(11)]
+names(dfCombine)
+colnames(dfCombine)[2]<- "year"
+
+dfCombine <- dfCombine %>% distinct(site_id, year, Evenness, Shannon, Simpson, richness, Totalabundance, Alien, abundance, proportion, taxon, country, Longitude_X, Latitude_Y)
+
+#remove no longer necessary df
+rm(NoNN, Shannon, Shannon1, Evenness, Evenness1, Simpson1, Simpson, AlienAbundance, dfAbundance, dfRichness, df1, dfJoined)
+
+gc()
+
+
+
+####################
+##Combine abiotic predictors into one dataframe
+fulldata <- read_xlsx("Full_data.xlsx")
+names(fulldata)
+
+pdata <- fulldata[, c("site_id", "Temperature", "Precipitation", "distance to outlet", "distance to weir")]
+names(pdata)
+colnames(pdata)[4]<- "distance_to_outlet"
+colnames(pdata)[5]<- "distance_to_weir"
+pdata <- pdata %>% distinct(site_id, Temperature, Precipitation, distance_to_outlet, distance_to_weir)
+
+#Combine with site_id, year, and country from dfCombine
+names(dfCombine)
+
+pdata <- pdata %>%
+  left_join(dfCombine[, c(1, 2, 12)], by = "site_id")
+
+names(pdata)
+
+
+pdata <- pdata %>% distinct(site_id, Temperature, Precipitation, distance_to_outlet, distance_to_weir, year, country)
+
+gc()
+
+
+##add type and dam_count
+barrier <- read_xlsx("dam_counts_10km.xlsx")
+pdata <- pdata %>%
+  left_join(barrier[, c(1, 2, 3)], by = "site_id")
+names(pdata)
+
+rm(barrier)
+
+pdata <- pdata %>% distinct(site_id, Temperature, Precipitation, distance_to_outlet, distance_to_weir, year, country, type, dam_count)
+
+
+gc()
+
+
+#ggplot
+names(dfCombine)
+library(ggplot2)
+dfCombine$site_id <- as.factor(dfCombine$site_id)
+dfCombine$year <- as.numeric(dfCombine$year)
+
+ggplot(data=dfCombine, aes(x= year, y= site_id)) +
+  geom_line(aes(x=year)) +
+  labs(title="Time Series per country pre year", x="Time", y="Time Series") +
+  scale_color_manual(values = c('#0072B2','#E69F00','#D55E00','#009E73','#56B4E9'))
+
+ggplot(data = dfCombine[!dfCombine$country %in% c("Germany", "Bulgaria"), ], aes(x = year, y = site_id, color = country)) +
+  geom_line() +
+  labs(title = "Time Series per country per year",
+       x = "Time",
+       y = "Site ID") + geom_vline(xintercept = 1995, size = 1.5, color = "red")+ geom_vline(xintercept = 2018, size = 1.5, color = "red")
+
+
+
+
+
+
+#####Narrow data
+#remove germany and bulgaria
+dfCombine <- dfCombine %>% filter(!country %in% c ("Germany", "Bulgaria"))
+pdata <- pdata %>% filter(!country %in% c ("Germany", "Bulgaria"))
+
+
+#Narrow dates (1995 - 2018)
+dfCombine <- dfCombine[dfCombine$year >= 1995 & dfCombine$year <= 2018, ]
+pdata <- pdata[pdata$year >= 1995 & pdata$year <= 2018, ]
+
+
+#get rid of NAs
+anyNA(dfCombine)
+anyNA(pdata)
+
+options(scipen = 999)
+
+#Remove TS with only one dam count because this is the time series and then this will remove all the ones without a barrier
+pdata <- pdata %>% filter(!dam_count == "1")
+
+#remove duplicated TS by site_id and type 
+pdata <- pdata[!duplicated(pdata[, c("site_id", "type")]), ]
+
+#now duplicates and NAs in dfCombine
+anyNA(dfCombine)
+##Could possibly remove the year and taxon variables in dfCombine but keep alien (Y/N)
+#The row abundance has the number of Native and non-native when you keep alien
+#remove duplicate rows in dfCombine by the site_id and alien
+dfCombine <- dfCombine[!duplicated(dfCombine[, c("site_id", "Alien")]), ]
+
+
+#Combine dfCombine and pdata
+dfCombine2 <- dfCombine %>%
+  left_join(pdata, by = c("site_id", "year", "country"))
+
+names(dfCombine2)
+
+
+
+
+###################################################################
+###GAMMs
+# Note: type must be a factor (it is a categorical variable)
+# Note "s()" is the smoother and "re" to select the random effect.
+# Country must be a factor
+####rotate the data before the gamm = wide to long?
+#Also which columns need to be numerical etc.
+#remove NA from time series with NA dam count & type 
+str(dfCombine)
+
+dfCombine2$site_id <- as.character(dfCombine2$site_id)
+dfCombine2$richness <- as.numeric(dfCombine2$richness)
+dfCombine2$type <- as.factor(dfCombine2$type)
+dfCombine2$country <-as.factor(dfCombine2$country)
+
+
+
+#############Why not GLMM? can we try this again
+#Also try maybe river nested in country
+
+#####GAMMs
+library(mgcv)
+
+##Basic gam
+
+b <- dfCombine2 %>% filter(dam_count <1000)
+
+gamm <- gam(richness ~ type + s(dam_count) + s(country, bs="re"),
+            data = b, select =T,
+            family = nb())
+
+op <- par(mfrow=c(2,2), mar=c(4,4,1,1))
+gam.check(gamm)
+par(op)
+summary.gam(gamm)
+op <- par(mfrow=c(3,3), mar=c(4,4,1,1))
+plot(gamm, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seWithMean = TRUE, residuals=TRUE)
+
+
+dev.off()
+
+
+##############################
+#find the relationship with invasives vs natives
+
+str(b)
+b$Alien <-as.factor(b$Alien)
+b$abundance <-as.factor(b$abundance)
+
+
+gamm <- gam(richness ~ s(dam_count) + s(country, bs="re") + Alien + abundance + type,
+            data = b, select =T,
+            family = nb())
+
+op <- par(mfrow=c(2,2), mar=c(4,4,1,1))
+gam.check(gamm)
+par(op)
+summary.gam(gamm)
+op <- par(mfrow=c(3,3), mar=c(4,4,1,1))
+plot(gamm, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seWithMean = TRUE, residuals=TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
