@@ -689,17 +689,6 @@ b$Alien <-as.factor(b$Alien)
 b$abundance <-as.factor(b$abundance)
 
 
-gamm <- gam(richness ~ s(dam_count) + s(country, bs="re") + Alien + abundance + type,
-            data = b, select =T,
-            family = nb())
-
-op <- par(mfrow=c(2,2), mar=c(4,4,1,1))
-gam.check(gamm)
-par(op)
-summary.gam(gamm)
-op <- par(mfrow=c(3,3), mar=c(4,4,1,1))
-plot(gamm, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seWithMean = TRUE, residuals=TRUE)
-
 
 
 
