@@ -681,15 +681,36 @@ plot(gamm, all.terms = TRUE, rug=TRUE, shade= TRUE, shade.col = "lightblue", seW
 dev.off()
 
 
-##############################
-#find the relationship with invasives vs natives
+############################## Code to count the number of barriers
 
-str(b)
-b$Alien <-as.factor(b$Alien)
-b$abundance <-as.factor(b$abundance)
+library(readxl)
+library(tidyr)
+library(sf)
+library(dplyr)
+df <- read_xlsx("Global_dataset (2).xlsx", sheet = "Sheet1")
+head(df)
+df <- df[,c(1,5,8,9)]
+df <- df[!duplicated(df$site_id), ]
+df<- df %>% drop_na()
+
+str(df)
+atlas = read.csv("atlas.csv")
+str(atlas)
+
+atlas_sf <- st_as_sf(atlas, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+df_sf_buffered 
 
 
+df_sf <- st_as_sf(df, coords = c("Longitude_X", "Latitude_Y"), crs = 4326)
+df_sf_buffered <- st_buffer(df_sf, dist = 10000) #10km
 
+joined <- st_join(df_sf_buffered, atlas_sf, join = st_intersects)
+
+# Count the number of dams 
+library(dplyr)
+dam_counts <- joined %>%
+  group_by(site_id, type) %>%
+  summarise(dam_count = n_distinct(GUID), .groups = 'drop')
 
 
 
