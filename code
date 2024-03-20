@@ -715,9 +715,44 @@ dam_counts <- joined %>%
 
 
 
+### Code to extract the buffer ID that intersect with the time series:
 
+# Load files:
+rivers<- sf::st_read("WholeRiv_Buffers.shp")
 
+ts<- sf::st_read("dfSF.shp")
+ts1 <- ts %>% filter(site_id =="100000001") # Filter just to reduce the size of the file
+ts1 <- ts1[!duplicated(ts1$site_id), ] # this line is super important (you remove redundancy in the ts -- duplicated ts) - you can also run it before
 
+str(ts)
+str(rivers)
+
+# I tried this but in my case is not working for some geometry problems:
+intersects <- st_intersects(ts1, rivers) 
+
+#Error in wk_handle.wk_wkb(wkb, s2_geography_writer(oriented = oriented,  : 
+#  Loop 0 is not valid: Edge 50 is degenerate (duplicate vertex)
+
+# Clean the file to remove those invalid figures:
+
+invalid_indices <- which(!st_is_valid(rivers))
+if (length(invalid_indices) > 0) {
+  invalid_reasons <- st_is_valid(rivers, reason = TRUE)[invalid_indices]
+  print(data.frame(index = invalid_indices, reason = invalid_reasons))
+} else {
+  print("UEEEEEEE the file is perfect and you dont need to correct it")
+}
+
+# Clean the file:
+rivers_clean <- rivers[-invalid_indices, ]
+
+# Now this is working:
+intersects <- st_intersects(ts1, rivers_clean)
+#Sparse geometry binary predicate list of length 1, where the
+#predicate was `intersects'
+# 1: 5517         (this is the row where is your buffer ID 
+
+ID <- rivers_clean[5517, ] # you can see your buffer ID here
 
 
 
