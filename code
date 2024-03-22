@@ -762,6 +762,25 @@ write_xlsx(intersecting_ids, "intersecting_ids.xlsx")
 
 
 
+####
+
+atlas <- read.csv("atlas.csv")
+str(atlas)
+str(intersecting_ids)
+str(rivers_clean)
+
+atlas_sf <- st_as_sf(atlas, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+rivers_clean <- st_transform(rivers_clean, st_crs(atlas_sf))
+
+intersecting_buffers <- intersecting_ids %>%
+  left_join(rivers_clean, by = c("River_ID" = "Buffer_ID"))
+
+
+intersecting_buffers_sf <- intersecting_buffers %>%  st_as_sf()
+nrow(intersecting_buffers_sf) # 1767
+
+intersecting_barriers <- st_intersection(atlas_sf, intersecting_buffers_sf)
+
 
 
 
