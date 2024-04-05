@@ -779,8 +779,24 @@ intersecting_buffers <- intersecting_ids %>%
 intersecting_buffers_sf <- intersecting_buffers %>%  st_as_sf()
 nrow(intersecting_buffers_sf) # 1767
 
-intersecting_barriers <- st_intersection(atlas_sf, intersecting_buffers_sf)
 
+chunk_size <- 1
+num_chunks <- ceiling(nrow(intersecting_buffers_sf) / chunk_size)
+
+for (i in 1:num_chunks) {
+  start_index <- (i - 1) * chunk_size + 1
+  end_index <- min(i * chunk_size, nrow(intersecting_buffers_sf))
+  
+  #time_series = intersecting_buffers_sf$site_id[i]
+  intersecting_barriers_chunk <- st_intersection(atlas_sf, intersecting_buffers_sf[start_index:end_index, ])
+  #intersecting_barriers_chunk$site_id = time_series
+  
+  intersecting_barriers_chunk$geometry_wkt <- st_as_text(intersecting_barriers_chunk$geometry)
+  csv_file_name <- paste0("intersecting_barriers_chunk_", i, ".csv")
+  write.csv(intersecting_barriers_chunk[, -which(names(intersecting_barriers_chunk) == "geometry")], 
+            csv_file_name, row.names = FALSE)
+  cat("SIUH")
+}
 
 
 
