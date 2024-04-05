@@ -780,7 +780,7 @@ intersecting_buffers_sf <- intersecting_buffers %>%  st_as_sf()
 nrow(intersecting_buffers_sf) # 1767
 
 
-chunk_size <- 1
+chunk_size <- 10
 num_chunks <- ceiling(nrow(intersecting_buffers_sf) / chunk_size)
 
 for (i in 1:num_chunks) {
