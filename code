@@ -785,6 +785,108 @@ intersecting_barriers <- st_intersection(atlas_sf, intersecting_buffers_sf)
 
 
 
+#############################################################
+###Might be completely wrong
+
+intersecting_buffers <- intersecting_ids %>%
+  left_join(rivers_clean, by = c("River_ID" = "Buffer_ID"))
+
+####
+#Break down the number of rivers in intersecting barriers
+###unique values in intersecting_buffers River_IDs
+unique_values <- unique(intersecting_buffers$River_ID)
+
+# To count the number of different unique values, you can use the length() function
+num_unique_values <- length(unique_values)
+
+# Print the unique values and the count
+print(unique_values)
+print(num_unique_values)
+
+#325 unique values
+
+
+#########
+
+##River buffers with TS in them
+# Extract unique values from the "River_ID" column in the first DataFrame
+# Subset rows from rivers_clean based on the unique IDs
+subset_rivers_clean <- rivers_clean[rivers_clean$Buffer_ID %in% unique_values, ]
+
+# Check the dimensions of the subsetted DataFrame
+dim(subset_rivers_clean)
+
+# Alternatively, if you want to create a new DataFrame with only the subsetted rows:
+rivers_with_TS <- rivers_clean[rivers_clean$Buffer_ID %in% unique_values, ]
+
+#325 rivers_with_TS
+
+
+########
+atlas <- read.csv("atlas.csv")
+str(atlas)
+str(intersecting_ids)
+str(rivers_clean)
+str(rivers_with_TS)
+
+atlas_sf <- st_as_sf(atlas, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+rivers_clean <- st_transform(rivers_clean, st_crs(atlas_sf))
+rivers_with_TS <- st_transform(rivers_with_TS, st_crs(atlas_sf))
+
+#instead of using intersecting_buffers as the sf we can now use rivers with TS
+nrow(rivers_with_TS) #325
+
+rm(atlas, intersecting_buffers, intersecting_ids, intersects, river_ID, rivers, subset_rivers_clean, ts, current_site_id, i, intersecting_rivers_indices, invalid_indices, invalid_reasons, num_unique_values, river_ID1, unique_values)
+
+
+names(atlas_sf)
+atlas_sf <- atlas_sf[, -c(2, 3, 4, 5, 7, 8, 9, 10)]
+atlas_sf <- atlas_sf[!duplicated(atlas_sf$GUID), ]
+
+names(rivers_with_TS)
+rivers_with_TS <- rivers_with_TS[, -c(2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)]
+rivers_with_TS <- rivers_with_TS[!duplicated(rivers_with_TS$Buffer_ID), ]
+
+
+#creating a 10km buffer around the river geometries
+rivers_10km <- st_buffer(rivers_with_TS, dist = 10000) #10km
+
+gc()
+
+#filtered_atlas <- st_intersection(atlas_sf, rivers_10km)
+
+filtered_atlas <- st_join(rivers_10km, atlas_sf, join = st_intersects)
+
+#join to rivers with TS
+TSrivers_with_barriers <- st_join(rivers_with_TS, filtered_atlas, join = st_intersects)
+
+
+# Perform intersection
+#intersection <- st_intersection(filtered_atlas, rivers_with_TS)
+#intersecting_barriers <- st_intersection(atlas_sf, rivers_with_TS)
+
+
+write.csv(filtered_atlas, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//filtered_atlas.csv")
+
+#tidy TSrivers_with_barriers
+#remove all rows without barriers
+TSrivers_with_barriers2 <- TSrivers_with_barriers[complete.cases(TSrivers_with_barriers$GUID), ]
+#remove the duplicated columns
+names(TSrivers_with_barriers2)
+TSrivers_with_barriers2 <- TSrivers_with_barriers2[, -c(4, 5, 6)]
+colnames(TSrivers_with_barriers2)[1] <- "HYRIV_ID"
+colnames(TSrivers_with_barriers2)[2] <- "MAIN_RIV"
+colnames(TSrivers_with_barriers2)[3] <- "Buffer_ID"
+#remove all dulplicates
+TSrivers_with_barriers2 <- TSrivers_with_barriers2[!duplicated(TSrivers_with_barriers2$GUID), ] ###### This almost halfed the number of observations so maybe double check - potentially there were barriers in more than one buffer?
+
+
+write.csv(TSrivers_with_barriers2, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//TSrivers_with_barriers2.csv")
+
+write.csv(rivers_with_TS, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//rivers_with_TS.csv")
+
+
+
 
 
 
