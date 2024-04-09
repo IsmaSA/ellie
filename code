@@ -1098,6 +1098,10 @@ intersecting_barriers <- intersecting_barriers[intersecting_barriers$type != "ot
 
 
 
+#### Note: not all TS rivers have recorded barriers in them - I am pretty sure the river in Ireland with TS doesn't have any AMBER barriers but if all the above is okay it should'nt be hard to go remove the rivers and ts that have no barriers
+
+
+
 
 
 
