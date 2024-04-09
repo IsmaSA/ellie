@@ -907,6 +907,215 @@ write.csv(rivers_with_TS, "C:/Users/User/OneDrive - Queen's University Belfast/P
 
 
 
+####### LAST SHOT!
+############ River Buffers ##############
+river_buffers <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//WholeRiv_Buffers.shp")
+ts <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/ROI//dfSF.shp")
+
+ts <- ts[!duplicated(ts$site_id), ]
+nrow(ts)
+
+str(ts)
+str(river_buffers)
+
+# Clean the file to remove those invalid figures:
+invalid_indices <- which(!st_is_valid(river_buffers))
+if (length(invalid_indices) > 0) {
+  invalid_reasons <- st_is_valid(river_buffers, reason = TRUE)[invalid_indices]
+  print(data.frame(index = invalid_indices, reason = invalid_reasons))
+} else {
+  print("No invalid geometries found.")
+}
+
+# Clean the file:
+rivers_clean <- river_buffers[-invalid_indices, ]
+
+# Now this is working:
+intersects <- st_intersects(ts, rivers_clean)
+
+nrow(intersects) # 1814
+
+intersecting_ids <- data.frame()
+for (i in seq_len(length(intersects))) {
+  intersecting_rivers_indices <- intersects[[i]]
+  
+  if (length(intersecting_rivers_indices) > 0) {
+    current_site_id <- ts$site_id[i]
+    river_ID <- river_buffers[intersecting_rivers_indices,]
+    river_ID1<- river_ID$Buffer_ID
+    
+    intersecting_ids <- rbind(intersecting_ids, data.frame("site_id" =current_site_id,
+                                                           "River_ID" = river_ID1 ))
+    cat(":-D", "/n:")
+  }
+}
+#done
+
+setdiff(unique(ts$site_id), intersecting_ids$site_id)
+write_xlsx(intersecting_ids, "intersecting_ids.xlsx")
+
+intersecting_ids <- read_xlsx("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/ROI//intersecting_ids.xlsx")
+
+
+#unique TS site_ids that intersect with rivers
+unique_values2 <- unique(intersecting_ids$site_id)
+num_unique_values2 <- length(unique_values2)
+print(unique_values2)
+print(num_unique_values2)
+#1746 unique values
+
+#TS that fall in river buffers
+TS_in_rivers <- ts[ts$site_id %in% unique_values2, ]
+
+write_sf(TS_in_rivers, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//TS_in_rivers.shp")
+
+
+############# This is where I think something was going wrong ######################
+###
+#left join intersecting_ids and rivers to get all the information of the rivers - including their buffer IDs 
+#then we will transfer it over to QGIS
+
+intersecting_buffers <- intersecting_ids %>%
+  left_join(rivers_clean, by = c("River_ID" = "Buffer_ID"))
+
+#write intersecting_buffers as csv
+write.csv(intersecting_buffers, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//rivers_with_TS.csv")
+
+write_sf(intersecting_buffers, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//intersecting_buffers.shp")
+
+#When we look then at the intersecting_buffers in QGIS it only has a few of them. Completely misses major parts of Europe
+
+#########################################################
+
+
+
+########### Fixing it #########################
+###To fix the above I took the TS that are in rivers to QGIS
+#####The TS_in_rivers was joined with the wholeriverbuffers in QGIS to find the rivers that have TS and their unique buffer IDs 
+##this new shapefile will then be used to find the barriers that intersect that 
+
+####The work that was done in QGIS,  could have potentially been done using the following code in R (but I have not tried it so cannot say it would work)####
+#Break down the number of rivers in intersecting barriers
+###unique values in intersecting_buffers River_IDs
+unique_values <- unique(intersecting_buffers$River_ID)
+
+# To count the number of different unique values, you can use the length() function
+num_unique_values <- length(unique_values)
+
+# Print the unique values and the count
+print(unique_values)
+print(num_unique_values)
+
+#325 unique values
+
+##River buffers with TS in them
+# Extract unique values from the "River_ID" column in the first DataFrame
+# Subset rows from rivers_clean based on the unique IDs
+subset_rivers_clean <- rivers_clean[rivers_clean$Buffer_ID %in% unique_values, ]
+
+# Check the dimensions of the subsetted DataFrame
+dim(subset_rivers_clean)
+
+# Alternatively, if you want to create a new DataFrame with only the subsetted rows:
+rivers_with_TS <- rivers_clean[rivers_clean$Buffer_ID %in% unique_values, ]
+
+#325 rivers_with_TS
+
+write_sf_rivers_with_TS, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//rivers_with_TS.shp")
+
+##################################
+
+
+
+######## Now finding the barriers in those rivers that we got from the QGIS work ###############
+setwd("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/ROI")
+atlas <- read.csv("atlas.csv")
+str(atlas)
+
+atlas_sf <- st_as_sf(atlas, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)
+
+#This is the Shapefile from QGIS I will send this
+RiverBuffers_withTS <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//RiverBuffers_withTS.shp")
+
+
+###Tidy up the data and workspace might be easier to work with
+rm(atlas, intersecting_buffers, intersecting_ids, intersects, river_ID, rivers, subset_rivers_clean, current_site_id, i, intersecting_rivers_indices, invalid_indices, invalid_reasons, num_unique_values, river_ID1, unique_values)
+
+names(atlas_sf)
+atlas_sf <- atlas_sf[, -c(2, 3, 4, 5, 7, 8, 9, 10)]
+atlas_sf <- atlas_sf[!duplicated(atlas_sf$GUID), ]
+
+names(RiverBuffers_withTS)
+RiverBuffers_withTS <- RiverBuffers_withTS[, -c(4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19, 21, 22, 25, 26)]
+RiverBuffers_withTS <- RiverBuffers_withTS[, -c(6, 7)]
+RiverBuffers_withTS <- RiverBuffers_withTS[!duplicated(RiverBuffers_withTS$Buffer_ID), ]
+RiverBuffers_withTS <- RiverBuffers_withTS[!duplicated(RiverBuffers_withTS$site_id), ]
+
+####We'll split the buffers into chunks
+chunk_size <- 10
+start_chunk <- 1
+num_chunks <- ceiling(nrow(RiverBuffers_withTS) / chunk_size) #I think 32-33 chunks
+
+for (i in start_chunk:num_chunks) {
+  start_index <- (i - 1) * chunk_size + 1
+  end_index <- min(i * chunk_size, nrow(RiverBuffers_withTS))
+  
+  #time_series = intersecting_buffers_sf$site_id[i]
+  intersecting_barriers_chunk <- st_intersection(atlas_sf, RiverBuffers_withTS[start_index:end_index, ])
+  #intersecting_barriers_chunk$site_id = time_series
+  
+  intersecting_barriers_chunk$geometry_wkt <- st_as_text(intersecting_barriers_chunk$geometry)
+  csv_file_name <- paste0("2bintersecting_barriers_chunk_", i, ".csv")
+  write.csv(intersecting_barriers_chunk[, -which(names(intersecting_barriers_chunk) == "geometry")], 
+            csv_file_name, row.names = FALSE)
+  cat("SIUH")
+}
+
+#done
+
+
+#the files created byt the chunks were mereged in excel
+intersecting_barriers <- read_xlsx("2b_all_barriers.xlsx")
+intersecting_barriers <- intersecting_barriers[!duplicated(intersecting_barriers$GUID), ] 
+
+#remove empty rows
+intersecting_barriers <- intersecting_barriers[complete.cases(intersecting_barriers$Buffer_ID), ]
+
+
+
+#creating shapefile to see in maps
+intersecting_barriers_sf <- st_as_sf(intersecting_barriers, wkt = "geometry_wkt", crs = 4326)
+st_write(intersecting_barriers_sf, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer/Intersecting barrier chunks/CSVs//intersecting_barriers.shp")
+
+
+
+
+#### Preparing the data for further work
+unique(intersecting_barriers$type)
+intersecting_barriers <- intersecting_barriers[intersecting_barriers$type != "other", ]
+
+#remove Germany and Belgium from the TS and Barriers
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
