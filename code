@@ -1106,6 +1106,140 @@ intersecting_barriers <- intersecting_barriers[intersecting_barriers$type != "ot
 
 
 
+# subset of the code for Spain:   Ismael
+
+rivers <- st_read(setwd("C:/Users/Propietario/Desktop/Slovakia database/HydroRIVERS_v10_eu_shp"))
+
+spain_bbox <- st_sfc(st_polygon(list(rbind(c(-9.392883, 35.946850), 
+                                           c(-9.392883, 43.748337), 
+                                           c(3.039484, 43.748337), 
+                                           c(3.039484, 35.946850),
+                                           c(-9.392883, 35.946850)))),
+                                  crs = st_crs(rivers))
+
+river_spain <- st_intersection(rivers, spain_bbox)
+plot(st_geometry(river_spain)) # it words iberian peninsula
+
+main_rivers <- river_spain %>%
+  group_by(HYBAS_L12) %>%   
+  summarise(geometry = st_union(geometry), .groups = "drop") # 
+
+plot(st_geometry(main_rivers[c(16:18),])) # check some "main" rivers
+
+main_rivers <- st_transform(main_rivers, crs = 32630)  # UTM zone 30N
+
+main_rivers_buff <- st_buffer(main_rivers, dist = 200) #200m
+
+plot(st_geometry(main_rivers_buff[c(16:18),]))
+plot(st_geometry(main_rivers_buff))
+
+setwd("C:/Users/Propietario/Downloads/ellie")
+
+ts <- readxl::read_xlsx("Global_dataset.xlsx", sheet = 2)
+ts_spain <- ts %>% filter(country=="Spain")
+ts_spain <- ts_spain[!duplicated(ts_spain$site_id), ]
+ts_spain <- ts_spain[,c(1,8,9)] 
+ts_spain <- ts_spain %>% drop_na()
+ts_spain_sf <- st_as_sf(ts_spain, coords = c("Longitude_X", "Latitude_Y"), crs = 4326)
+
+
+barrier<- read.csv("atlas.csv")
+barrier_spain <- barrier %>% filter(Country=="SPAIN")
+
+# -----
+ts_spain_sf <- st_transform(ts_spain_sf, st_crs(main_rivers_buff))
+ts_in_river_buffer <- st_join(ts_spain_sf, main_rivers_buff, join = st_intersects)
+
+# Here you see that we have more rows in ts in buffer that the time series in Spain (in fact is the same number but because fo the buffer some time series is in more than one buffer its okay)
+nrow(ts_spain) #245
+nrow(ts_in_river_buffer) #248
+length(unique(ts_in_river_buffer$site_id)) # 245,  see? - all good
+
+
+barrier_spain_sf <- st_as_sf(barrier_spain, coords = c("Longitude_WGS84", "Latitude_WGS84"), crs = 4326)  # use the appropriate column names for Longitude and Latitude
+barrier_spain_sf <- st_transform(barrier_spain_sf, st_crs(main_rivers_buff))
+barriers_in_river_buffer <- st_join(barrier_spain_sf, main_rivers_buff, join = st_intersects)
+
+
+# Lets see if it is working - a random example 
+site <- "103000060"
+ts_ex = ts_in_river_buffer %>% filter(site_id==site)
+plot(st_geometry(ts_in_river_buffer[1, ]))
+
+riv = "2120592530"
+rive <- main_rivers_buff %>% filter(HYBAS_L12==riv)
+plot(st_geometry(rive))
+
+
+barr <- barriers_in_river_buffer %>% filter(HYBAS_L12==riv)
+plot(st_geometry(barr))
+
+
+rive_sf <- st_as_sf(rive)
+barrier_sf <- st_as_sf(barr)
+ts_sf <- st_as_sf(ts_ex)
+
+ggplot() +
+  geom_sf(data = rive_sf, color = 'blue', fill = 'lightblue', size = 0.5, alpha = 0.5) +
+  geom_sf(data = ts_sf, color = 'red', shape = 21, size = 3, fill = 'red') +
+  geom_sf(data = barrier_sf, color = 'purple', shape = 21, size = 1.5, fill = 'purple') +
+  labs(subtitle = paste0("River ID:", riv, "   | Time Series ID:", ts_ex)) +
+  theme_bw() # Actually seems the Ebro basin 
+
+
+# Narrowing from the basin ------
+
+main_rivers <- river_spain %>%
+  group_by(MAIN_RIV) %>%   
+  summarise(geometry = st_union(geometry), .groups = "drop") 
+main_rivers <- st_transform(main_rivers, crs = 32630)  # UTM zone 30N
+main_rivers_buff <- st_buffer(main_rivers, dist = 200) #200m
+
+ts_spain_sf <- st_transform(ts_spain_sf, st_crs(main_rivers_buff))
+ts_in_river_buffer <- st_join(ts_spain_sf, main_rivers_buff, join = st_intersects)
+
+barrier_spain_sf <- st_transform(barrier_spain_sf, st_crs(main_rivers_buff))
+barriers_in_river_buffer <- st_join(barrier_spain_sf, main_rivers_buff, join = st_intersects)
+
+
+site <- "103000060"
+ts_ex = ts_in_river_buffer %>% filter(site_id==site)
+plot(st_geometry(ts_in_river_buffer[1, ]))
+
+riv = "20598415"
+rive <- main_rivers_buff %>% filter(MAIN_RIV==riv)
+plot(st_geometry(rive))
+
+rive<- river_spain %>% filter((MAIN_RIV==riv))
+rive <- st_transform(rive, st_crs(ts_ex))
+segment <- st_join(ts_ex, rive, join = st_intersects)
+
+
+
+barr <- barriers_in_river_buffer %>% filter(MAIN_RIV==riv)
+plot(st_geometry(barr))
+
+
+rive_sf <- st_as_sf(segment)
+barrier_sf <- st_as_sf(barr)
+ts_sf <- st_as_sf(ts_ex)
+
+ggplot() +
+  geom_sf(data = rive_sf, color = 'blue', fill = 'lightblue', size = 0.5, alpha = 0.5) +
+  geom_sf(data = ts_sf, color = 'red', shape = 21, size = 3, fill = 'red') +
+  geom_sf(data = barrier_sf, color = 'purple', shape = 21, size = 1.5, fill = 'purple') +
+  labs(subtitle = paste0("River ID:", riv, "   | Time Series ID:", ts_ex)) +
+  theme_bw() 
+
+
+
+
+
+
+
+
+
+
 
 
 
