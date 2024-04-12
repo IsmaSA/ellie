@@ -1204,7 +1204,7 @@ barriers_in_river_buffer <- st_join(barrier_spain_sf, main_rivers_buff, join = s
 
 site <- "103000060"
 ts_ex = ts_in_river_buffer %>% filter(site_id==site)
-plot(st_geometry(ts_in_river_buffer[1, ]))
+plot(st_geometry(ts_ex))
 
 riv = "20598415"
 rive <- main_rivers_buff %>% filter(MAIN_RIV==riv)
@@ -1212,25 +1212,29 @@ plot(st_geometry(rive))
 
 rive<- river_spain %>% filter((MAIN_RIV==riv))
 rive <- st_transform(rive, st_crs(ts_ex))
-segment <- st_join(ts_ex, rive, join = st_intersects)
+rive_buff <- st_buffer(rive, dist = 200) #200m
 
 
+nearest_segment_index <- st_nearest_feature(ts_ex, rive)
+nearest_segment <- rive[nearest_segment_index, ]
 
 barr <- barriers_in_river_buffer %>% filter(MAIN_RIV==riv)
-plot(st_geometry(barr))
+plot(st_geometry(barr), add =T)
+nearest_segment2 <- st_buffer(nearest_segment, dist = 50)
+barriers_in_segment <- barr[st_intersects(barr, nearest_segment2, sparse = FALSE), ]
 
 
-rive_sf <- st_as_sf(segment)
-barrier_sf <- st_as_sf(barr)
+rive_sf <- st_as_sf(rive_buff)
+rive_sf <- st_as_sf(nearest_segment)
+barrier_sf <- st_as_sf(barriers_in_segment)
 ts_sf <- st_as_sf(ts_ex)
 
 ggplot() +
-  geom_sf(data = rive_sf, color = 'blue', fill = 'lightblue', size = 0.5, alpha = 0.5) +
+  geom_sf(data = rive_sf, color = 'blue', fill = 'lightblue', size = 1, alpha = 0.5) +
   geom_sf(data = ts_sf, color = 'red', shape = 21, size = 3, fill = 'red') +
-  geom_sf(data = barrier_sf, color = 'purple', shape = 21, size = 1.5, fill = 'purple') +
+    geom_sf(data = barrier_sf, color = 'purple', shape = 21, size = 1.5, fill = 'purple') +
   labs(subtitle = paste0("River ID:", riv, "   | Time Series ID:", ts_ex)) +
   theme_bw() 
-
 
 
 
