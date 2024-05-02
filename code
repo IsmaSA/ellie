@@ -1241,6 +1241,144 @@ ggplot() +
 
 
 
+################ TS X GRanD and GDT ############################ <---- I got it to work well for the L12 from HydroBasins as a polygons I made on QGIS but I couldn't get the intersects to work in R the way it does for AMBER - let me know if you have more luck
+#Go through the L12s with the TS for dam presence with GDT/GRanD
+# analysis for dam primary and secondary use with invasions and community indicies
+# regression model for dates of construction with TS
+
+setwd("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer")
+
+#TS in rivers
+#ts <- st_read("TS_in_rivers.shp") #### Don't forget to remove the ts that don't have barriers
+## Use ts in river buffer
+
+#Rivers with TS
+#rivers <- st_read("RiverBuffers_withTS.shp")
+#rivers <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/ROI//HydroRIVERS_UK.shp")
+
+### GDT
+GDT <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GDT/GDAT_data_v1/data//GDAT_v1_dams.shp")
+#narrow GDT to Europe
+EUGDT <- GDT %>% filter(Continent == "Europe")
+## Export EUGDT as a shapefile to keep for future work
+st_write(EUGDT, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GDT/GDAT_data_v1/data//EU_GDT.shp")
+
+EUGDT <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GDT/GDAT_data_v1/data//EU_GDT.shp")
+
+### GRanD
+GRanD <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GRanD_Version_1_3//GRanD_dams_v1_3.shp")
+#Narrow to European countries
+unique(GRanD$COUNTRY)
+european_countries <- c(
+  "United Kingdom", "Ireland", "France", "Spain", "Portugal", "Netherlands", "Belgium", 
+  "Luxembourg", "Germany", "Switzerland", "Italy", "Austria", "Denmark", "Sweden", 
+  "Norway", "Finland", "Greece", "Poland", "Czech Republic", "Slovakia", "Hungary", 
+  "Romania", "Bulgaria", "Croatia", "Slovenia", "Estonia", "Latvia", "Lithuania", 
+  "Malta", "Cyprus"
+)
+GRanD_europe <- GRanD[GRanD$COUNTRY %in% european_countries, ]
+head(GRanD_europe)
+#Could also do an intersect the way Ismael did with Spain_box
+# or with the shapefile of a polygon of Europe EEA
+## Save as shp
+st_write(GRanD_europe, "C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GRanD_Version_1_3//GRanD_Europe.shp")
+
+## Tidying both GDT and GRanD
+#Remove any that don't have long/lat/geom
+#GDT
+names(EUGDT)
+anyNA(EUGDT$geomtery)
+#GRanD
+names(GRanD_europe)
+anyNA(GRanD_europe$geometry)
+#GRanD <- GRanD[complete.cases(GRanD$LONG_DD), ]
+
+#### Intersecting GRanD, Ts and Rivers ###############
+#TS in rivers
+ts <- st_read("TS_in_rivers.shp") #### Don't forget to remove the ts that don't have barriers
+
+#Rivers with TS
+#rivers <- st_read("RiverBuffers_withTS.shp")
+rivers <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/ROI//HydroRIVERS_UK.shp")
+
+main_rivers <- rivers %>%
+  group_by(HYBAS_L12) %>%   
+  summarise(geometry = st_union(geometry), .groups = "drop")
+
+plot(st_geometry(main_rivers[c(16:18),])) # check some "main" rivers
+
+main_rivers <- st_transform(main_rivers, crs = 32630)  # UTM zone 30N
+
+main_rivers_buff <- st_buffer(main_rivers, dist = 200) #200m
+
+plot(st_geometry(main_rivers_buff[c(16:18),]))
+plot(st_geometry(main_rivers_buff))
+
+#ts <- readxl::read_xlsx("Global_dataset.xlsx", sheet = 2)
+ts <- ts[!duplicated(ts$site_id), ]
+names(ts)
+ts <- ts[,c(1,8,9, 12)] 
+ts <- ts %>% drop_na()
+
+TS_in_L12 <- st_transform(TS_in_L12, st_crs(main_rivers_buff))
+ts_in_river_buffer <- st_join(TS_in_L12, main_rivers_buff, join = st_intersects)
+
+nrow(ts)
+nrow(ts_in_river_buffer)
+length(unique(ts_in_river_buffer$site_id)) 
+
+# GRanD data #### <---- this is what I couldn't get to work
+GRanD_europe <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GRanD_Version_1_3//GRanD_Europe.shp")
+GRanD_europe <- GRanD_europe[,-c(4, 6, 8, 11, 12, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 49, 50, 51, 52, 53, 54, 55, 58)] 
+names(GRanD_europe)
+GRanD_europe <- st_transform(GRanD_europe, st_crs(main_rivers_buff))
+GRanD_in_river_buffer <- st_join(GRanD_europe, main_rivers_buff, join = st_intersects)
+
+
+#Work done in QGIS 
+#intersected L12 with TS and GRanD points <----- this worked ### I can send you these files
+QGIS_GRanD_with_TS <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GRanD_Version_1_3//GRanD_with_TS_L12.shp")
+QGIS_TS_with_GRanD <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GRanD_Version_1_3//TS_with_GRanD.shp")
+QGIS_L12_with_TS_and_GRanD <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/GRanD_Version_1_3//L12_with_GRanD_and_TS.shp")
+
+names(QGIS_GRanD_with_TS)
+QGIS_GRanD_with_TS <- QGIS_GRanD_with_TS[,-c(2, 3, 4, 6, 9, 10, 11, 12, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 49, 50, 51, 52, 53, 54, 55, 58, 60, 61, 62, 63, 64, 65, 66, 68, 69, 70, 71, 72, 73, 83, 84)] 
+
+unique(QGIS_GRanD_with_TS$HYBAS_ID)
+unique(QGIS_TS_with_GRanD$HYBAS_ID)
+unique(QGIS_TS_with_GRanD$site_id)
+unique(QGIS_L12_with_TS_and_GRanD$HYBAS_ID)
+
+
+# checking it works with an example
+site <- "109000283"
+ts_ex <- QGIS_TS_with_GRanD %>% filter(site_id==site)
+plot(st_geometry(ts[1, ]))
+
+riv <- "2121095590"
+rive <- QGIS_L12_with_TS_and_GRanD %>% filter(HYBAS_ID==riv)
+plot(st_geometry(rive))
+
+GRanD <- QGIS_GRanD_with_TS %>% filter(HYBAS_ID==riv)
+plot(st_geometry(GRanD))
+
+rive_sf <- st_as_sf(rive)
+GRanD_sf <- st_as_sf(GRanD)
+ts_sf <- st_as_sf(ts_ex)
+
+ggplot() +
+  geom_sf(data = rive_sf, color = 'blue', fill = 'lightblue', size = 0.5, alpha = 0.5) +
+  geom_sf(data = ts_sf, color = 'red', shape = 21, size = 3, fill = 'red') +
+  geom_sf(data = GRanD_sf, color = 'purple', shape = 21, size = 1.5, fill = 'purple') +
+  labs(subtitle = paste0("River ID:", riv, "   | Time Series ID:", ts_ex)) +
+  theme_bw() 
+
+### Its works!
+
+## GRanD does only come out with about 15 dams so I am also about to do the same thing with GDT
+
+# Currently going through and doing it with the Hydroriver as well so we can work with the river rather than the whole basin, but for the GRanD and GDT data we don't need to know the distance to the dam or direction or anything just as much and for most their is only one dam per basin so it would be oky to just work with the basin I think
+
 
 
 
