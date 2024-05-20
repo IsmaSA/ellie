@@ -1382,6 +1382,533 @@ ggplot() +
 
 
 
+### AMBER x TS ####
+######### Basin level (L12) work #########################################################################################################
+## Number and types of barriers in the L12 basin 
+# total 
+# upstream 
+# downstream
+
+
+## Distance to the next closest barrier
+## Type of next closest barriers
+# relationship between distance and type of next barrier and total, native, and invasive richness
+
+
+library(sf)
+ts_in_river_buffer2 <- st_as_sf(ts_in_river_buffer2)
+ts_in_river_buffer2 <- st_transform(ts_in_river_buffer2, st_crs(barriers_in_river_buffer))
+distances <- st_distance(ts_in_river_buffer2, barriers_in_river_buffer)
+min_distances <- apply(distances, 1, min)
+ts_in_river_buffer2$closest_dam_distance <- min_distances
+
+#revert from sf
+ts_in_river_buffer2 <- as.data.frame(ts_in_river_buffer2)
+
+library(dplyr)
+
+# Join dfCombine2 with ts_in_river_buffer2 based on site_id
+ts_in_river_buffer2 <- ts_in_river_buffer2 %>%
+  left_join(select(dfCombine2, site_id, richness), by = "site_id")
+
+
+#plot
+# Create a histogram of the closest dam distances
+hist(ts_in_river_buffer2$closest_dam_distance, 
+     breaks = "FD",  # Choose the number of breaks using the Freedman-Diaconis rule
+     main = "Histogram of Closest Barrier Distances",
+     xlab = "Distance to Closest Barrier",
+     ylab = "Frequency")
+
+#scatter graph
+names(ts_in_river_buffer2)
+
+# create a scatter plot of the closest dam distances against richness
+plot(ts_in_river_buffer2$richness, ts_in_river_buffer2$closest_dam_distance,
+     main = "Closest Dam Distance vs. TS Richness",
+     xlab = "Richness",
+     ylab = "Distance to Closest Dam")
+
+
+library(sf)
+library(dplyr)
+library(mgcv)  # GAMs
+
+st_crs(ts_in_river_buffer2) ### crs = EPSG:32630 so distance is in meters
+
+# Convert ts_in_river_buffer2 to sf and transform if needed
+ts_in_river_buffer2 <- st_as_sf(ts_in_river_buffer2)
+ts_in_river_buffer2 <- st_transform(ts_in_river_buffer2, st_crs(barriers_in_river_buffer))
+
+# Calculate distances to barriers and corresponding types
+distances <- st_distance(ts_in_river_buffer2, barriers_in_river_buffer)
+min_distances <- apply(distances, 1, min)
+closest_barrier_index <- apply(distances, 1, which.min)
+closest_barrier_type <- barriers_in_river_buffer$type[closest_barrier_index]
+
+# Add the closest barrier distance and type to ts_in_river_buffer2
+ts_in_river_buffer2$closest_barrier_distance <- min_distances
+ts_in_river_buffer2$closest_barrier_type <- closest_barrier_type
+
+# Join dfCombine2 with ts_in_river_buffer2 based on site_id
+ts_in_river_buffer2 <- left_join(ts_in_river_buffer2, select(dfCombine2, site_id, richness), by = "site_id")
+
+# Create a histogram of the closest barrier distances
+hist(ts_in_river_buffer2$closest_barrier_distance, 
+     breaks = "FD",  # Choose the number of breaks using the Freedman-Diaconis rule
+     main = "Histogram of Closest Barrier Distances",
+     xlab = "Distance to Closest Barrier",
+     ylab = "Frequency")
+
+# Create a scatter plot of the closest barrier distances against richness
+names(ts_in_river_buffer2)
+ts_in_river_buffer2 <- ts_in_river_buffer2[,-c(13)]
+names(ts_in_river_buffer2)
+colnames(ts_in_river_buffer2)[15] <- "richness"
+
+plot(ts_in_river_buffer2$richness, ts_in_river_buffer2$closest_barrier_distance,
+     main = "Closest Barrier Distance vs. TS Richness",
+     xlab = "Richness",
+     ylab = "Distance to Closest Barrier")
+
+
+# Fit GAM model
+gam_model <- gam(richness ~ s(closest_barrier_distance), data = ts_in_river_buffer2, method = "REML")
+summary(gam_model)
+#there is a significant relationship between richness and barrier distance
+# but lets find the direction of this relationship ---> increasing distance = increasing richness?
+plot(gam_model, select = 1)  # Select the first smooth term for visualization
+# Generate predictions along the range of distance values
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_in_river_buffer2$closest_barrier_distance), 
+                                                     max(ts_in_river_buffer2$closest_barrier_distance), 
+                                                     length.out = 100))
+# Predict richness using the fitted model
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+# Plot predicted richness against distance
+plot(ts_in_river_buffer2$closest_barrier_distance, ts_in_river_buffer2$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier",
+     xlab = "Distance to Closest Barrier (meters)", ylab = "Richness", ylim = c(0, max(ts_in_river_buffer2$richness)))
+# Add smoothed curve
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+# Add confidence intervals
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+
+# slightly negative relationship????
+
+# go back and make country, temperature, precipitation, and rivers random effects ??!!!!!
+
+
+## go back through these models to decide whether to use lme4 or glm !!!!
+
+
+## maybe try it getting rid of the ones that have a greater distance than like 20km !!!!!!!!!!!!!
+threshold_distance <- 20000  # 20 km = 20,000 meters
+ts_in_river_buffer2$within_20km <- ifelse(ts_in_river_buffer2$closest_barrier_distance <= threshold_distance, TRUE, FALSE)
+ts_within_20km <- ts_in_river_buffer2[ts_in_river_buffer2$within_20km, ]
+
+countries_within_20km <- unique(ts_within_20km$country)
+
+length(ts_within_20km$country)
+length(ts_within_20km$closest_barrier_distance)
+length(ts_within_20km$richness)
+any(is.na(ts_within_20km$country))
+any(is.na(ts_within_20km$closest_barrier_distance))
+any(is.na(ts_within_20km$richness))
+names(ts_within_20km)
+
+# Fit linear mixed-effects model
+library(nlme)
+lme_model <- lme(richness ~ closest_barrier_distance, 
+                 random = ~1 | country, 
+                 data = ts_within_20km)
+summary(lme_model)
+#not significant
+
+gam_model <- gam(richness ~ s(closest_barrier_distance), data = ts_within_20km, method = "REML")
+summary(gam_model)
+#significant relationship
+
+plot(gam_model, select = 1)
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_within_20km$closest_barrier_distance), 
+                                                     max(ts_within_20km$closest_barrier_distance), 
+                                                     length.out = 100))
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+plot(ts_within_20km$closest_barrier_distance, ts_within_20km$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier (within 20km)",
+     xlab = "Distance to Closest Barrier within 20km (meters)", ylab = "Richness", ylim = c(0, max(ts_within_20km$richness)))
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+# curves down then goes back up!!!!
+
+
+
+#within 50km 
+threshold_distance <- 50000  # 50 km = 50,000 meters
+ts_in_river_buffer2$within_50km <- ifelse(ts_in_river_buffer2$closest_barrier_distance <= threshold_distance, TRUE, FALSE)
+
+ts_within_50km <- ts_in_river_buffer2[ts_in_river_buffer2$within_50km, ]
+gam_model <- gam(richness ~ s(closest_barrier_distance), data = ts_within_50km, method = "REML")
+summary(gam_model)
+# still significant
+
+plot(gam_model, select = 1)
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_within_50km$closest_barrier_distance), 
+                                                     max(ts_within_50km$closest_barrier_distance), 
+                                                     length.out = 100))
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+plot(ts_within_50km$closest_barrier_distance, ts_within_50km$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier (within 50km)",
+     xlab = "Distance to Closest Barrier within 50km (meters)", ylab = "Richness", ylim = c(0, max(ts_within_50km$richness)))
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+# v-shaped pattern - peaks around 18 - 20 km
+
+
+#within 5km
+threshold_distance <- 5000  # 5 km = 5,000 meters
+ts_in_river_buffer2$within_5km <- ifelse(ts_in_river_buffer2$closest_barrier_distance <= threshold_distance, TRUE, FALSE)
+
+ts_within_5km <- ts_in_river_buffer2[ts_in_river_buffer2$within_5km, ]
+gam_model <- gam(richness ~ s(closest_barrier_distance), data = ts_within_5km, method = "REML")
+summary(gam_model)
+# still significant
+
+plot(gam_model, select = 1)
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_within_5km$closest_barrier_distance), 
+                                                     max(ts_within_5km$closest_barrier_distance), 
+                                                     length.out = 100))
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+plot(ts_within_5km$closest_barrier_distance, ts_within_5km$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier (within 5km)",
+     xlab = "Distance to Closest Barrier within 5km (meters)", ylab = "Richness", ylim = c(0, max(ts_within_5km$richness)))
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+# almost flat - slighltly negative
+
+
+
+# within 2km
+threshold_distance <- 2000  # 2 km = 2,000 meters
+ts_in_river_buffer2$within_2km <- ifelse(ts_in_river_buffer2$closest_barrier_distance <= threshold_distance, TRUE, FALSE)
+
+ts_within_2km <- ts_in_river_buffer2[ts_in_river_buffer2$within_2km, ]
+gam_model <- gam(richness ~ s(closest_barrier_distance), data = ts_within_2km, method = "REML")
+summary(gam_model)
+# still significant
+
+plot(gam_model, select = 1)
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_within_2km$closest_barrier_distance), 
+                                                     max(ts_within_2km$closest_barrier_distance), 
+                                                     length.out = 100))
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+plot(ts_within_2km$closest_barrier_distance, ts_within_2km$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier (within 2km)",
+     xlab = "Distance to Closest Barrier within 2km (meters)", ylab = "Richness", ylim = c(0, max(ts_within_2km$richness)))
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+# really similar to 5
+
+
+#within 500m
+threshold_distance <- 500  #500 meters
+ts_in_river_buffer2$within_500m <- ifelse(ts_in_river_buffer2$closest_barrier_distance <= threshold_distance, TRUE, FALSE)
+
+ts_within_500m <- ts_in_river_buffer2[ts_in_river_buffer2$within_500m, ]
+gam_model <- gam(richness ~ s(closest_barrier_distance), data = ts_within_500m, method = "REML")
+summary(gam_model)
+# still significant
+
+plot(gam_model, select = 1)
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_within_500m$closest_barrier_distance), 
+                                                     max(ts_within_500m$closest_barrier_distance), 
+                                                     length.out = 100))
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+plot(ts_within_500m$closest_barrier_distance, ts_within_500m$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier (within 500m)",
+     xlab = "Distance to Closest Barrier within 500m (meters)", ylab = "Richness", ylim = c(0, max(ts_within_500m$richness)))
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+# almost flat - slighltly negative
+
+
+## Note 20km buffer is the best
+
+
+
+###### with distance and type ############
+install.packages("gamlss")
+library(gamlss)
+# Fit GAMLSS model with both continuous and categorical predictors
+ts_in_river_buffer2 <- na.omit(ts_in_river_buffer2)
+gamlss_model <- gamlss(richness ~ pb(closest_barrier_distance) + factor(closest_barrier_type), data = ts_in_river_buffer2)
+summary(gamlss_model)
+
+### significant relationship between distance and richness
+### most significant relationship is with sluice?
+### also significant relationships with dams and weirs
+#                                     Estimate Std. Error t value Pr(>|t|)    
+#(Intercept)                         2.762e+01  1.141e+00  24.204  < 2e-16 ***
+#pb(closest_barrier_distance)       -2.940e-05  4.927e-06  -5.967 2.63e-09 ***
+#factor(closest_barrier_type)dam     3.420e+00  1.328e+00   2.575  0.01007 *  
+#factor(closest_barrier_type)other  -7.179e-01  1.264e+00  -0.568  0.57016    
+#factor(closest_barrier_type)ramp    2.022e+00  1.451e+00   1.393  0.16371    
+#factor(closest_barrier_type)sluice -4.335e+00  1.412e+00  -3.071  0.00215 ** 
+#factor(closest_barrier_type)weir    2.702e+00  1.178e+00   2.294  0.02185 *  
+
+
+# within 20km 
+threshold_distance <- 20000  # 20 km = 20,000 meters
+ts_in_river_buffer2$within_20km <- ifelse(ts_in_river_buffer2$closest_barrier_distance <= threshold_distance, TRUE, FALSE)
+ts_within_20km <- ts_in_river_buffer2[ts_in_river_buffer2$within_20km, ]
+
+#try with country as a random effect
+length(ts_within_20km$closest_barrier_distance)
+length(ts_within_20km$closest_barrier_type)
+length(ts_within_20km$richness)
+
+gam_model <- gam(richness ~ s(closest_barrier_distance) + closest_barrier_type, data = ts_within_20km, method = "REML")
+summary(gam_model)
+#significant relationship with dam and sluice, weir and ramp are low
+plot(gam_model, select = 1)
+newdata <- data.frame(closest_barrier_distance = seq(min(ts_within_20km$closest_barrier_distance), 
+                                                     max(ts_within_20km$closest_barrier_distance), 
+                                                     length.out = 100))
+predictions <- predict(gam_model, newdata, type = "response", se.fit = TRUE)
+plot(ts_within_20km$closest_barrier_distance, ts_within_20km$richness, 
+     main = "Relationship Between Richness and Distance to Closest Barrier (within 20km)",
+     xlab = "Distance to Closest Barrier within 20km (meters)", ylab = "Richness", ylim = c(0, max(ts_within_20km$richness)))
+lines(newdata$closest_barrier_distance, predictions$fit, col = "blue", lwd = 2)
+lines(newdata$closest_barrier_distance, predictions$fit + 2 * predictions$se.fit, col = "gray", lty = "dashed")
+lines(newdata$closest_barrier_distance, predictions$fit - 2 * predictions$se.fit, col = "gray", lty = "dashed")
+
+
+#lme model
+lme_model <- lme(richness ~ closest_barrier_distance + closest_barrier_type, 
+                 random = ~1 | country, 
+                 data = ts_within_20km)
+summary(lme_model)
+# none are significant but dam and weir have the lowest p value
+
+# glmm???
+
+
+
+#### Next do all this with native vs invasive richness ##############
+# Check unique values in the "alien" column
+# Model the richness of invasive and native species
+names(NoNN)
+names(ts_within_20km)
+
+NoNN$site_id <- as.character(NoNN$site_id)
+NoNN$year <- as.character(NoNN$year)
+
+ts_within_20km <- ts_within_20km %>%
+  left_join(NoNN, by = c("site_id", "year"))
+
+names(ts_within_20km)
+colnames(ts_within_20km)[7] <- "Alien"
+colnames(ts_within_20km)[15] <- "richness" #this is total richness -- double check!
+colnames(ts_within_20km)[23] <- "NoNN_Alien"
+colnames(ts_within_20km)[24] <- "NoNN_Richness"
+
+#filter the richness just for those with invaders
+ts_within_20km_IAS <- ts_within_20km[ts_within_20km$NoNN_Alien == "Y", ]
+
+# GAM for invaders
+gam_model <- gam(NoNN_Richness ~ s(closest_barrier_distance) + closest_barrier_type, 
+                 data = ts_within_20km_IAS, 
+                 method = "REML")
+summary(gam_model)
+
+
+gam_model <- gam(NoNN_Richness ~ s(closest_barrier_distance), 
+                 data = ts_within_20km_IAS, 
+                 method = "REML")
+summary(gam_model)
+
+
+gam_model <- gam(NoNN_Richness ~ closest_barrier_type, 
+                 data = ts_within_20km_IAS, 
+                 method = "REML")
+summary(gam_model)
+
+# there is a significant relationship with dams 
+# but very significant relationship with sluices????
+
+
+### for native richness
+ts_within_20km_Native <- ts_within_20km[ts_within_20km$NoNN_Alien == "N", ]
+
+gam_model <- gam(NoNN_Richness ~ s(closest_barrier_distance) + closest_barrier_type, 
+                 data = ts_within_20km_Native, 
+                 method = "REML")
+summary(gam_model)
+
+
+
+gam_model <- gam(NoNN_Richness ~ s(closest_barrier_distance), 
+                 data = ts_within_20km_Native, 
+                 method = "REML")
+summary(gam_model)
+
+
+
+gam_model <- gam(NoNN_Richness ~ closest_barrier_type, 
+                 data = ts_within_20km_Native, 
+                 method = "REML")
+summary(gam_model)
+
+# same sort of results as IAS but no significant relationship with dams!!!! - then we move on to GRanD and GDT
+
+
+# all the above work was done according to HYBAS_L12 -- this was all the work we have been doing for the last few months -- so make sure to do this
+# it gives justification to use the basin rather than just a proxy radius !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
+
+########### AMBER X TS L4 ############################################################################ <- 
+###### Whole catchment (L4) level work #######
+
+RiverBuffers_withTS <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//RiverBuffers_withTS.shp")
+intersecting_barriers <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer/Intersecting barrier chunks/CSVs//intersecting_barriers.shp")
+river_buffers <- st_read("C:/Users/User/OneDrive - Queen's University Belfast/PhD/AMBER Data/Output_RiverBuffer//WholeRiv_Buffers.shp")
+
+head(RiverBuffers_withTS)
+
+# we will use strahler order as a proxy for flow direction <--- still trying to think of another way
+# also workign to use elevation for this
+
+
+# currently I am working to get the number and types of barriers upstream and downstream - from whole way between headwaters and mouth of rivers <- this will be ready soon
+
+
+
+
+
+
+
+
+####################################################################################################
+########### Modelling the GRanD/GDT x TS relationship #############
+######### Basin level (L12) work ##########
+### Distance to the next closest dam
+# relationship between distance to barrier and total, native, and invasive richness <- should this be a regression not model
+# relationship between if the TS is upstream or downstream of the dam
+### Maybe there are more than one TS in each basin
+# identify the TS which is upstream and the one which is downstream
+# how do these communities differ?? e.g., more invaders downstream??
+
+
+### Relationship with the TS and height of the dam
+# is there a difference in the upstream and downstream TS depending on height
+
+#### is height or diftance to the barrier having a greater impact on the nearby TS
+
+
+### find out if there is more than one dam in the L12 basin <-- this might not be done as I think there are only maybe 30 dams 
+# is there a relationship between richness and the number of dams --- e.g., with increasing number of dams doens richness of natives decrease?
+# is the upstream or downstream dam having a greater impact
+
+
+### Is there a relationship between the main and secondary uses of the dams and the total, native, and invasive richness
+# does the effect of dam use change if the TS is upstream vs downstream of the dam 
+
+
+
+### Regression of the year of construction of the dam against the TS
+# at L12 level
+# at whole catchment level 
+## if there is a change in this we can also look at the distance to which the effects of dam construction are most significant
+
+
+
+## distance from each TS to the closest dam
+library(sf)
+# st_distance
+QGIS_TS_with_GRanD <- st_transform(QGIS_TS_with_GRanD, st_crs(QGIS_GRanD_with_TS))
+distances <- st_distance(QGIS_TS_with_GRanD, QGIS_GRanD_with_TS)
+min_distances <- apply(distances, 1, min)
+QGIS_TS_with_GRanD$closest_dam_distance <- min_distances
+
+names(QGIS_TS_with_GRanD)
+QGIS_TS_with_GRanD <- QGIS_TS_with_GRanD[,-c(6, 27:37, 96, 98, 99, 102:121)] 
+
+
+GRanD_Richness <- QGIS_TS_with_GRanD %>% 
+  group_by(site_id) %>% #could also add year here but have to add years to dams as well
+  summarise(richness = n())
+
+QGIS_TS_with_GRanD <- st_join(QGIS_TS_with_GRanD, GRanD_Richness, join = st_intersects)
+
+names(QGIS_TS_with_GRanD)
+
+# Create a histogram of the closest dam distances
+hist(QGIS_TS_with_GRanD$closest_dam_distance, 
+     breaks = "FD",  # Choose the number of breaks using the Freedman-Diaconis rule
+     main = "Histogram of Closest Dam Distances",
+     xlab = "Distance to Closest Dam",
+     ylab = "Frequency")
+
+# create a scatter plot of the closest dam distances against one of the site characteristics
+plot(QGIS_TS_with_GRanD$richness, QGIS_TS_with_GRanD$closest_dam_distance,
+     main = "Closest Dam Distance vs. TS Richness",
+     xlab = "Richness",
+     ylab = "Distance to Closest Dam")
+
+plot(dfCombine2$richness, ts$closest_dam_distance,
+     main = "Closest Dam Distance vs. TS Richness",
+     xlab = "Richness",
+     ylab = "Distance to Closest Dam")
+#try to add a trend line --- seems to be a general increase
+
+
+######## Models
+#modelling ts and distance to dam
+
+# only use the ts that are in rivers with dams
+library(mgcv)
+gam_model <- gam(dfCombine2$richness ~ s(ts$closest_dam_distance), family = poisson)
+summary(gam_model)
+
+plot(dfCombine2$richness, ts$closest_dam_distance,
+     main = "Closest Dam Distance vs. TS Richness",
+     xlab = "Richness",
+     ylab = "Distance to Closest Dam")
+lines(dfCombine2$richness, predict(gam_model), col = "red")
+
+
+plot(dfCombine2$richness, ts$closest_dam_distance,
+     main = "Closest Dam Distance vs. TS Richness",
+     xlab = "Richness",
+     ylab = "Distance to Closest Dam")
+lines(dfCombine2$richness, predict(gam_model), col = "red")
+
+
+#Model the effects of dam presence and absences??
+
+# Model the interaction between TS and dam use!!
+gam_richness_invasive <- gam(richness_invasive ~ s("main use") + s("secondary use"), data = your_data, family = poisson)
+summary(gam_richness_invasive)
+plot(gam_richness_invasive)
+
+# Try to also bring in GDT - check online if I have the most up to date files
+
+
+
+# Model dam height and size
+
+
+
+
+
 
 
 
