@@ -1906,6 +1906,133 @@ plot(gam_richness_invasive)
 # Model dam height and size
 
 
+# Ellie modelling - Ismael
+
+
+pred <- read_xlsx("predictors.xlsx")
+pred <- pred[!duplicated(pred[,c("site_id","year")]), ]
+names(pred)
+head(pred)
+
+type_barrier= read_xlsx("number_type_barriers.xlsx")
+type_barrier <- type_barrier %>%
+  group_by(site_id) %>%
+  summarise(
+    culvert = sum(culvert, na.rm = TRUE),
+    dam = sum(dam, na.rm = TRUE),
+    ford = sum(ford, na.rm = TRUE),
+    other = sum(other, na.rm = TRUE),
+    ramp = sum(ramp, na.rm = TRUE),
+    sluice = sum(sluice, na.rm = TRUE),
+    weir = sum(weir, na.rm = TRUE)  )
+
+type_barrier <- type_barrier %>%
+  mutate(total_barriers = rowSums(dplyr::select(., culvert:weir)))
+
+
+#close_barrier= read_xlsx("TS_with_closest_barriers.xlsx")
+#close_barrier = close_barrier[,c(1,2,14,15)]
+
+
+data <- left_join(pred, type_barrier, by = c("site_id")) 
+data2 <- data %>% drop_na() 
+
+unique(data2$site_id) # 60 sites?
+
+
+# I want to include here the abundance per year (yes sorry - i have been talking with chat gtpt) and country, coordinates
+setwd("C:/Users/Propietario/Desktop/Escritorio/full databse/DATA")
+df <- read_xlsx("Global_dataset.xlsx", sheet = "Sheet1")
+df1 = df %>% group_by(site_id, year) %>% mutate(Abundance = sum(abundance),
+                                                Richness = n_distinct(taxon))
+
+data3 <- left_join(data2, df1[,c(1,2,12,5,8,9,13)], by = c("site_id", "year")) 
+data3 <- data3[!duplicated(data3[,c("site_id","year")]),]
+
+unique(data3$site_id)
+
+## okay I am retarded I see the values are in the next database 
+
+ts <- st_read("dfTS_L12.shp")
+names(ts)
+
+ts$site_id <- as.character(ts$site_id)
+ts$year <- as.character(ts$year)
+data3$site_id <- as.character(data3$site_id)
+data3$year <- as.character(data3$year)
+
+
+# lets combine the res. variable
+data4 <- left_join(data3, ts[,c(1:7,9,10,15,17)], by = c("site_id","year")) 
+data4 <-data4 %>% filter(year > 1994) # threshold that me mentioned 1995 
+data4 <- data4[!duplicated(data4[,c("site_id","year")]),]
+
+# Note that we will try to make resp. variable per year, e.g., total abundance, richness, etc, 
+# here i calculated total abundance and richness as example
+
+length(unique(data4$site_id)) # only 59 ts ?
+
+min(data4$year) # 1995 
+
+# Model  -----
+# lets try first with glm 
+
+hist(data4$Richness)  # Better that expected, however here we have to consider few things:
+# count data (richness)
+# left skewed
+# 2 main options negative binomial and poisson
+
+mean(data4$Richness)
+sd(data4$Richness)
+
+data4$year <- as.numeric(data4$year)
+data4$site_id <- as.factor(data4$site_id)
+names(data4)
+
+install.packages("glmmTMB")
+library(glmmTMB)
+
+str(data4)
+
+predictors <- c("distance_to_outlet", "distance_to_weir", "culvert", "dam", 
+                "ford", "other", "ramp", "sluice", "weir", "total_barriers")
+
+formula <- as.formula(paste("Richness ~", paste(predictors, collapse = " + ")))
+
+nrow(data4)
+
+model1 <- glmmTMB(Richness ~ distance_to_outlet+ distance_to_weir +culvert+ dam+ year+
+                  ford+other+ ramp+ sluice+ weir+  (1|country/site_id),
+                  data = data4, family = nbinom2)
+
+summary(model1)
+
+# plot results
+
+sjPlot::plot_model(model1, type = "re", show.values = TRUE, value.offset = 0.3) # random effect
+sjPlot::plot_model(model1, type = "est", show.values = TRUE, value.offset = 0.3)  # fixed effect
+
+# Predicted vs. observed plot
+data4$predicted <- predict(model1, type = "response")
+ggplot(data4, aes(x = predicted, y = Richness)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red", size= 1.5) +
+  labs(x = "Pred", y = "Obs", title = "Mbappe") +
+  theme_bw()
+
+
+# abundance model -- 
+
+hist(data4$Abundance) # much clear the skewed, we might need a transformation
+data4$Abundance <- round(data4$Abundance)
+
+model2 <- glmmTMB(Abundance ~ distance_to_outlet+ distance_to_weir +culvert+ dam+ year+
+                    ford+other+ ramp+ sluice+ weir+  (1|country/site_id),
+                  data = data4, family = nbinom2)
+
+summary(model2)
+
+write_xlsx(data4, "Ellie_data.xlsx")
 
 
 
