@@ -2035,29 +2035,81 @@ summary(model2)
 write_xlsx(data4, "Ellie_data.xlsx")
 
 
+#### Isma fix 10/06/2024
+getwd()
+setwd("C:/Users/Propietario/Downloads/ellie-1/data")
+data <- readxl::read_xlsx("Ellie_completedata.xlsx")
+
+names(data)
+str(data)
+
+data <- data[!duplicated(data[c("site_id","year")]), ]
+install.packages("glmmTMB")
+library(glmmTMB)
+library(magrittr)
+
+predictors <- c("distance_to_outlet", "distance_to_weir", "culvert", "dam", "ford", "other", "ramp", "sluice", "weir", "total_barriers")
+formula <- as.formula(paste("Richness ~", paste(predictors, collapse = " + ")))
+
+nrow(data)
+summary(data)
+data <- data[,c("Richness", "year", "Country", "site_id", predictors)]
+data<- data %>%  tidyr::drop_na()
+data$year <- as.numeric(data$year)
+
+anyNA(data)
+mean(data$distance_to_outlet)
+
+model1 <- glmmTMB(Richness ~ distance_to_outlet+ distance_to_weir +culvert+ dam+ 
+ford+other+ ramp+ sluice+ weir+  (1|site_id),
+data = data, family = nbinom2)
+
+summary(model1)
+
+# Note for Ellie: I tried several model I am also surprise of this converge problem but seems we avoid it by removing collinearity (redundant varaibles) - but we lost some types of barries (statistically correct but not sure ecological) 
+# Also I noted that we have super few data now
+nrow(data) # 60 rows = max 6 predictors
+# You can see how some most of the site id contain only one row how is that posible?
+table(data$site_id)
+
+library(caret)
+vif_values <- car::vif(lm(Richness ~ ., data = data[, c("Richness", "distance_to_outlet", "distance_to_weir", "culvert", "ford", "other", "ramp", "sluice", "weir")]))
+
+model2 <- glmmTMB(Richness ~ distance_to_outlet+ distance_to_weir + dam+
+ford+ sluice+ weir+  (1|site_id),
+data = data, family = nbinom2)
+
+summary(model2)
+
+#                     Estimate Std. Error z value Pr(>|z|)
+#(Intercept)         3.549e+00  6.646e-02   53.39   <2e-16 ***
+#distance_to_outlet -3.891e-07  2.291e-07   -1.70   0.0894 .
+#distance_to_weir   -2.335e-04  2.521e-04   -0.93   0.3543
+#dam                 1.222e-04  1.884e-04    0.65   0.5165    
+#ford               -3.442e-04  5.959e-04   -0.58   0.5636
+#sluice              8.563e-05  6.894e-04    0.12   0.9012
+#weir                7.771e-06  3.406e-05    0.23   0.8195
 
 
+model3 <- glmmTMB(Richness ~ scale(distance_to_outlet) + scale(distance_to_weir) + dam, 
+                  data = data, family = nbinom2)
+
+summary(model3)
 
 
+# read: https://www.rdocumentation.org/packages/MASS/versions/7.3-60.0.1/topics/glmmPQL
+model_extra <- glmmPQL(Richness ~ distance_to_outlet+ distance_to_weir +culvert+ dam+ 
+ford+other+ ramp+ sluice+ weir, random = ~ 1 | site_id, family = negative.binomial(theta = 1), data = data)
 
+summary(model_extra)
 
+vif_values <- car::vif(lm(Richness ~ ., data = data[, c("Richness", "distance_to_outlet", "distance_to_weir", "culvert","dam", "ford", "other", "ramp", "sluice", "weir")]))
+vif_values <- car::vif(lm(Richness ~ ., data = data[, c("Richness", "distance_to_outlet", "distance_to_weir","dam", "ford", "other", "ramp", "sluice", "weir")]))
+vif_values <- car::vif(lm(Richness ~ ., data = data[, c("Richness", "distance_to_outlet", "distance_to_weir","dam", "ford", "ramp", "sluice", "weir")]))
 
+model_extra2 <- glmmPQL(Richness ~ distance_to_outlet+ distance_to_weir + dam+ 
+ford+ ramp+ sluice+ weir, random = ~ 1 | site_id, family = negative.binomial(theta = 1), data = data)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+summary(model_extra2)
 
 
